@@ -48,14 +48,18 @@ public class RaceTrack : MonoBehaviour
         {
             RaceTimer += Time.deltaTime;
         }
-        TimerTMP.text = $"{NextCheckpointIndex - 1}/{Checkpoints.Count}\n{RaceTimer:F2}";
+        TimerTMP.text = $"{NextCheckpointIndex}/{Checkpoints.Count}\n{RaceTimer:F2}";
     }
 
     public void SetNextCheckpoint()
     {
-        if (NextCheckpointIndex >= Checkpoints.Count) return;
-
         NextCheckpointIndex++;
+        if (NextCheckpointIndex >= Checkpoints.Count)
+        {
+            HasTimerStarted = false;
+            return;
+        }
+
         Checkpoints[NextCheckpointIndex].SetAsNextCheckpoint(true);
     }
 
