@@ -6,7 +6,7 @@ public class RaceTrack : MonoBehaviour
 {
     public static RaceTrack Instance;
 
-    public int NextCheckpoint = 0;
+    public int NextCheckpointIndex = 0;
     public List<Checkpoint> Checkpoints = new();
     public float RaceTimer;
     public bool hasTimerStarted;
@@ -15,7 +15,8 @@ public class RaceTrack : MonoBehaviour
     public TextAsset file;
     public GameObject CheckpointPrefab;
     public TextMeshProUGUI TimerTMP;
-    public Checkpoint CurrentCheckpoint => Checkpoints[NextCheckpoint];
+    public Checkpoint CurrentCheckpoint => Checkpoints[NextCheckpointIndex - 1];
+    public Checkpoint NextCheckpoint => Checkpoints[NextCheckpointIndex];
 
     private void Awake()
     {
@@ -32,24 +33,29 @@ public class RaceTrack : MonoBehaviour
             Checkpoints.Add(checkpointObject.GetComponent<Checkpoint>());
         }
 
+        for (int i = 0; i < Checkpoints.Count - 1; i++)
+        {
+            Checkpoints[i].transform.LookAt(Checkpoints[i + 1].transform);
+        }
+
         SetNextCheckpoint();
     }
 
     private void Update()
     {
-        if (hasTimerStarted && NextCheckpoint <= Checkpoints.Count)
+        if (hasTimerStarted && NextCheckpointIndex <= Checkpoints.Count)
         {
             RaceTimer += Time.deltaTime;
-            TimerTMP.text = $"{NextCheckpoint}/{Checkpoints.Count}\n{RaceTimer:F2}";
         }
+        TimerTMP.text = $"{NextCheckpointIndex - 1}/{Checkpoints.Count}\n{RaceTimer:F2}";
     }
 
     public void SetNextCheckpoint()
     {
-        if (NextCheckpoint >= Checkpoints.Count) return;
+        if (NextCheckpointIndex >= Checkpoints.Count) return;
 
-        Checkpoints[NextCheckpoint].SetAsNextCheckpoint(true);
-        NextCheckpoint++;
+        Checkpoints[NextCheckpointIndex].SetAsNextCheckpoint(true);
+        NextCheckpointIndex++;
     }
 
     List<Vector3> ParseFile()
