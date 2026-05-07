@@ -8,6 +8,13 @@ public class Drone : MonoBehaviour
     public static Drone Instance;
     public bool CanMove;
 
+    public float CurrentSpeed   { get; private set; }
+    public float CurrentYawRate { get; private set; }
+
+    [Header("Head Tracking")]
+    [SerializeField] private Transform trackingSpace;
+    [SerializeField] private bool disableHeadMovement = false;
+
     [Header("Flight Settings")]
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float rotateSpeed = 60f;
@@ -62,17 +69,21 @@ public class Drone : MonoBehaviour
 
     private void Update()
     {
+        // keep trying to acquire the subsystem until found (starts up asynchronously)
+        if (handSubsystem == null)
+            TryAcquireSubsystem();
+    }
+
+    // LateUpdate runs after OVR head tracking, eliminating one-frame position lag
+    private void LateUpdate()
+    {
         if (!CanMove) return;
 
-        // subsystem starts up asynchronously - retry every frame until found
-        if (handSubsystem == null)
+        // fall back to keyboard when no headset subsystem is available
+        if (handSubsystem == null || !handSubsystem.running)
         {
-            TryAcquireSubsystem();
-            if (handSubsystem == null)
-            {
-                KeyboardFallback();
-                return;
-            }
+            KeyboardFallback();
+            return;
         }
 
         Vector3 movement = Vector3.zero;
@@ -98,8 +109,17 @@ public class Drone : MonoBehaviour
             yaw = ApplyDeadZone(local.x) * rotateSpeed;
         }
 
+        CurrentSpeed   = movement.magnitude;
+        CurrentYawRate = Mathf.Abs(yaw);
+
         transform.position += movement * Time.deltaTime;
         transform.Rotate(Vector3.up, yaw * Time.deltaTime, Space.World);
+
+        if (disableHeadMovement && trackingSpace != null)
+        {
+            trackingSpace.localPosition = Vector3.zero;
+            trackingSpace.localRotation = Quaternion.identity;
+        }
     }
 
     // Derives the palm-facing direction from three joint positions.
