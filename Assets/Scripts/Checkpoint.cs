@@ -26,7 +26,6 @@ public class Checkpoint : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         if (!other.CompareTag("Player")) return;
-        RaceTrack.Instance.hasTimerStarted = true;
         if (IsNextCheckpoint)
         {
             RaceTrack.Instance.SetNextCheckpoint();

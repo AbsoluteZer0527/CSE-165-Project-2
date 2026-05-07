@@ -6,10 +6,10 @@ public class RaceTrack : MonoBehaviour
 {
     public static RaceTrack Instance;
 
-    public int NextCheckpointIndex = 0;
+    public int NextCheckpointIndex = 1;
     public List<Checkpoint> Checkpoints = new();
     public float RaceTimer;
-    public bool hasTimerStarted;
+    public bool HasTimerStarted;
 
     [Header("Refs")]
     public TextAsset file;
@@ -38,12 +38,13 @@ public class RaceTrack : MonoBehaviour
             Checkpoints[i].transform.LookAt(Checkpoints[i + 1].transform);
         }
 
-        SetNextCheckpoint();
+        Checkpoints[1].SetAsNextCheckpoint(true);
+        Drone.Instance.Respawn();
     }
 
     private void Update()
     {
-        if (hasTimerStarted && NextCheckpointIndex <= Checkpoints.Count)
+        if (HasTimerStarted && NextCheckpointIndex <= Checkpoints.Count)
         {
             RaceTimer += Time.deltaTime;
         }
@@ -54,8 +55,8 @@ public class RaceTrack : MonoBehaviour
     {
         if (NextCheckpointIndex >= Checkpoints.Count) return;
 
-        Checkpoints[NextCheckpointIndex].SetAsNextCheckpoint(true);
         NextCheckpointIndex++;
+        Checkpoints[NextCheckpointIndex].SetAsNextCheckpoint(true);
     }
 
     List<Vector3> ParseFile()
