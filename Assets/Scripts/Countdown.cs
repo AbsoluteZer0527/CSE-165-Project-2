@@ -8,6 +8,10 @@ public class Countdown : MonoBehaviour
 
     public TextMeshProUGUI CountdownTMP;
 
+    [Header("Audio")]
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip countdownClip;
+
     private void Awake()
     {
         Instance = this;
@@ -20,6 +24,9 @@ public class Countdown : MonoBehaviour
 
     private IEnumerator CountdownCoroutine()
     {
+        if (audioSource != null && countdownClip != null)
+            audioSource.PlayOneShot(countdownClip);
+
         CountdownTMP.text = "3";
         yield return new WaitForSeconds(1);
         CountdownTMP.text = "2";

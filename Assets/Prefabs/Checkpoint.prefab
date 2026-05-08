@@ -177,6 +177,13 @@ MonoBehaviour:
   IsNextMaterial: {fileID: 2100000, guid: 469f776e5e3d9be408f478cc62d1c5ac, type: 2}
   TriggerMaterial: {fileID: 2100000, guid: f02da17be19d52b4882b9df41010a82d, type: 2}
   IsNextTriggerMaterial: {fileID: 2100000, guid: 2e9cde4d309d6c140b81b562fa6fdf72, type: 2}
+  reachedClip: {fileID: 8300000, guid: 82bd69ff8ae4df34dbce4dabf3e4e312, type: 3}
+  beaconClip: {fileID: 8300000, guid: 4d62b44658e476c43a607eb8da2abf02, type: 3}
+  beaconMaxDistance: 150
+  minPitch: 0.8
+  maxPitch: 4
+  minPulseRate: 0.8
+  maxPulseRate: 6
 --- !u!135 &5989389217620279431
 SphereCollider:
   m_ObjectHideFlags: 0

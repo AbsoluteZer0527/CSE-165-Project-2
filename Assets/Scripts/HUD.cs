@@ -6,17 +6,20 @@ public class HUD : MonoBehaviour
 
     private void Update()
     {
-        if (RaceTrack.Instance.NextCheckpointIndex < RaceTrack.Instance.Checkpoints.Count)
-        {
-            TargetIndicator.transform.position = Camera.main.WorldToScreenPoint(RaceTrack.Instance.NextCheckpoint.transform.position);
+        bool raceOver = RaceTrack.Instance.NextCheckpointIndex >= RaceTrack.Instance.Checkpoints.Count;
 
-            float clampedX = Mathf.Clamp(TargetIndicator.transform.position.x, 0, Screen.width);
-            float clampedY = Mathf.Clamp(TargetIndicator.transform.position.y, 0, Screen.height);
-            TargetIndicator.transform.position = new Vector2(clampedX, clampedY);
-        }
-        else
+        // hide target indicator entirely when spatial audio mode is the active wayfinding method
+        if (RaceTrack.Instance.SpatialAudioMode || raceOver)
         {
-            TargetIndicator.transform.position = Vector3.zero;
+            TargetIndicator.gameObject.SetActive(false);
+            return;
         }
+
+        TargetIndicator.gameObject.SetActive(true);
+        TargetIndicator.transform.position = Camera.main.WorldToScreenPoint(RaceTrack.Instance.NextCheckpoint.transform.position);
+
+        float clampedX = Mathf.Clamp(TargetIndicator.transform.position.x, 0, Screen.width);
+        float clampedY = Mathf.Clamp(TargetIndicator.transform.position.y, 0, Screen.height);
+        TargetIndicator.transform.position = new Vector2(clampedX, clampedY);
     }
 }

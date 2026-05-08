@@ -15,6 +15,11 @@ public class RaceTrack : MonoBehaviour
     public TextAsset file;
     public GameObject CheckpointPrefab;
     public TextMeshProUGUI TimerTMP;
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip finishClip;
+    public bool SpatialAudioMode = false;
+
     public Checkpoint CurrentCheckpoint => Checkpoints[NextCheckpointIndex - 1];
     public Checkpoint NextCheckpoint => Checkpoints[NextCheckpointIndex];
 
@@ -29,7 +34,6 @@ public class RaceTrack : MonoBehaviour
         {
             GameObject checkpointObject = Instantiate(CheckpointPrefab, transform);
             checkpointObject.transform.position = pos;
-
             Checkpoints.Add(checkpointObject.GetComponent<Checkpoint>());
         }
 
@@ -57,6 +61,8 @@ public class RaceTrack : MonoBehaviour
         if (NextCheckpointIndex >= Checkpoints.Count)
         {
             HasTimerStarted = false;
+            if (finishClip != null)
+                AudioSource.PlayClipAtPoint(finishClip, Drone.Instance.transform.position);
             return;
         }
 
