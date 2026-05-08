@@ -39,11 +39,11 @@ public class Drone : MonoBehaviour
 
     // cached per-frame hand state (written by OnUpdatedHands, read by LateUpdate)
     private Vector3 rightPalmNormal;   // right hand orientation for forward/strafe
-    private Vector3 leftPalmNormal;    // left hand orientation for yaw (roll axis)
-    private Vector3 leftFingerDir;     // left hand finger direction for altitude
+    private Vector3 leftFingerDir;     // left hand middle finger direction for altitude
     private bool rightHandValid;
     private bool leftHandValid;
     private bool rightIsFist;
+    private float leftYawInput;     // derived from index/pinky finger tilt (see TryGetYawInput)
 
     // smooth velocity
     private Vector3 currentHoriz;
@@ -84,9 +84,10 @@ public class Drone : MonoBehaviour
     {
         rightHandValid = TryGetHandVectors(subsystem.rightHand, isRightHand: true,
                              out rightPalmNormal, out _);
-        leftHandValid  = TryGetHandVectors(subsystem.leftHand,  isRightHand: false,
-                             out leftPalmNormal,  out leftFingerDir);
+        leftHandValid  = TryGetHandVectors(subsystem.leftHand, isRightHand: false,
+                             out _, out leftFingerDir);
         rightIsFist    = IsFist(subsystem.rightHand);
+        TryGetYawInput(subsystem.leftHand, out leftYawInput);
     }
 
     private void Update()
@@ -106,8 +107,14 @@ public class Drone : MonoBehaviour
             return;
         }
 
-        // converts world-space vectors to drone-local so movement follows drone heading
-        Quaternion invDroneYaw = Quaternion.Inverse(Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
+        // Movement follows the camera's visual facing direction.
+        // Dot the palm normal against camera axes directly — no rotations needed,
+        // so respawn (which rotates the drone/tracking-space) can't flip directions.
+        Camera cam        = Camera.main;
+        float  camYawAng  = cam != null ? cam.transform.eulerAngles.y : transform.eulerAngles.y;
+        Quaternion camYaw = Quaternion.Euler(0f, camYawAng, 0f);
+        Vector3 camForward = camYaw * Vector3.forward;
+        Vector3 camRight   = camYaw * Vector3.right;
 
         // ---------------------------------------------------------------
         // RIGHT HAND — lateral movement only (like right joystick)
@@ -120,9 +127,11 @@ public class Drone : MonoBehaviour
 
         if (rightHandValid && !rightIsFist)
         {
-            Vector3 local = invDroneYaw * rightPalmNormal;
-            targetHoriz += transform.forward * (ApplyDeadZone(-local.z) * moveSpeed);
-            targetHoriz += transform.right   * (ApplyDeadZone( local.x) * moveSpeed);
+            // Palm normal tilts away from camForward when hand tilts forward, so negate.
+            float fwdInput    = -Vector3.Dot(rightPalmNormal, camForward);
+            float strafeInput =  Vector3.Dot(rightPalmNormal, camRight);
+            targetHoriz += camForward * (ApplyDeadZone(fwdInput)    * moveSpeed);
+            targetHoriz += camRight   * (ApplyDeadZone(strafeInput) * moveSpeed);
         }
         // fist → targetHoriz stays zero → decelerates to stop
 
@@ -139,13 +148,11 @@ public class Drone : MonoBehaviour
         float targetAlt = 0f;
         float targetYaw = 0f;
 
-        if (leftHandValid)
+        // right fist = full brake: skip left-hand altitude/yaw so everything decelerates to stop
+        if (leftHandValid && !rightIsFist)
         {
-            // altitude: finger tilt up/down — neutral fingerDir.y ≈ 0 so dead zone works cleanly
             targetAlt = ApplyDeadZone(leftFingerDir.y) * altitudeSpeed;
-
-            // yaw: wrist roll in world-space X — works regardless of drone heading
-            targetYaw = ApplyDeadZone(leftPalmNormal.x) * rotateSpeed;
+            targetYaw = ApplyDeadZone(leftYawInput) * rotateSpeed;
         }
 
         // ---------------------------------------------------------------
@@ -213,14 +220,31 @@ public class Drone : MonoBehaviour
         return true;
     }
 
-    // All four fingers curled in = fist
+    // Yaw from left hand index finger pointing direction.
+    // Point index finger right = turn right, left = turn left, straight ahead = neutral.
+    private static bool TryGetYawInput(XRHand hand, out float yawInput)
+    {
+        yawInput = 0f;
+        if (!hand.isTracked) return false;
+        if (!hand.GetJoint(XRHandJointID.IndexProximal).TryGetPose(out Pose proximal) ||
+            !hand.GetJoint(XRHandJointID.IndexTip).TryGetPose(out Pose tip))
+            return false;
+
+        // World-space X of the finger direction: negative = left, positive = right
+        yawInput = (tip.position - proximal.position).normalized.x;
+        return true;
+    }
+
+    // 3 of 4 fingers curled = fist (tolerates one occluded joint)
     private static bool IsFist(XRHand hand)
     {
         if (!hand.isTracked) return false;
-        return IsFingerCurled(hand, XRHandJointID.IndexTip,  XRHandJointID.IndexProximal)  &&
-               IsFingerCurled(hand, XRHandJointID.MiddleTip, XRHandJointID.MiddleProximal) &&
-               IsFingerCurled(hand, XRHandJointID.RingTip,   XRHandJointID.RingProximal)   &&
-               IsFingerCurled(hand, XRHandJointID.LittleTip, XRHandJointID.LittleProximal);
+        int curled = 0;
+        if (IsFingerCurled(hand, XRHandJointID.IndexTip,  XRHandJointID.IndexProximal))  curled++;
+        if (IsFingerCurled(hand, XRHandJointID.MiddleTip, XRHandJointID.MiddleProximal)) curled++;
+        if (IsFingerCurled(hand, XRHandJointID.RingTip,   XRHandJointID.RingProximal))   curled++;
+        if (IsFingerCurled(hand, XRHandJointID.LittleTip, XRHandJointID.LittleProximal)) curled++;
+        return curled >= 3;
     }
 
     private static bool IsFingerCurled(XRHand hand, XRHandJointID tipId, XRHandJointID proximalId)
@@ -232,7 +256,7 @@ public class Drone : MonoBehaviour
 
         Vector3 knuckleDir = (proximal.position - wrist.position).normalized;
         Vector3 fingerDir  = (tip.position - proximal.position).normalized;
-        return Vector3.Dot(knuckleDir, fingerDir) < 0.3f;
+        return Vector3.Dot(knuckleDir, fingerDir) < 0.5f;
     }
 
     private float ApplyDeadZone(float value)
@@ -244,15 +268,38 @@ public class Drone : MonoBehaviour
 
     private void KeyboardFallback()
     {
-        int elevate = 0;
-        elevate += Keyboard.current.shiftKey.IsPressed() ? 1 : 0;
-        elevate += Keyboard.current.ctrlKey.IsPressed() ? -1 : 0;
-        Vector2 moveInput = InputSystem.actions.FindAction("Move").ReadValue<Vector2>();
-        transform.Translate(new Vector3(moveInput.x, elevate, moveInput.y) * 5 * Time.deltaTime, Space.Self);
-        int rotate = 0;
-        rotate += Keyboard.current.eKey.IsPressed() ? 1 : 0;
-        rotate += Keyboard.current.qKey.IsPressed() ? -1 : 0;
-        transform.Rotate(Vector3.up, rotate * Time.deltaTime * 10);
+        Vector2 moveInput   = InputSystem.actions.FindAction("Move").ReadValue<Vector2>();
+        float enterThrust   = Keyboard.current.enterKey.IsPressed() ? 1f : 0f;
+        float elevate       = (Keyboard.current.shiftKey.IsPressed() ? 1f : 0f)
+                            + (Keyboard.current.ctrlKey.IsPressed()  ? -1f : 0f);
+        float yawInput      = (Keyboard.current.eKey.IsPressed() ? 1f : 0f)
+                            + (Keyboard.current.qKey.IsPressed() ? -1f : 0f);
+
+        float forwardInput  = Mathf.Clamp(moveInput.y + enterThrust, -1f, 1f);
+        Camera kbCam        = Camera.main;
+        float  kbCamYaw     = kbCam != null ? kbCam.transform.eulerAngles.y : transform.eulerAngles.y;
+        Quaternion kbCamRot = Quaternion.Euler(0f, kbCamYaw, 0f);
+        Vector3 targetHoriz = (kbCamRot * Vector3.right)   * moveInput.x  * moveSpeed
+                            + (kbCamRot * Vector3.forward) * forwardInput * moveSpeed;
+        float targetAlt = elevate  * altitudeSpeed;
+        float targetYaw = yawInput * rotateSpeed;
+
+        float horizRate = targetHoriz.magnitude >= currentHoriz.magnitude ? accelerationRate : decelerationRate;
+        currentHoriz = Vector3.MoveTowards(currentHoriz, targetHoriz, horizRate * Time.deltaTime);
+        float altRate = Mathf.Abs(targetAlt) >= Mathf.Abs(currentAlt) ? accelerationRate : decelerationRate;
+        currentAlt = Mathf.MoveTowards(currentAlt, targetAlt, altRate * Time.deltaTime);
+        float yawRate = Mathf.Abs(targetYaw) >= Mathf.Abs(currentYaw) ? accelerationRate : decelerationRate;
+        currentYaw = Mathf.MoveTowards(currentYaw, targetYaw, yawRate * Time.deltaTime);
+
+        Vector3 velocity = currentHoriz + Vector3.up * currentAlt;
+        CurrentSpeed   = velocity.magnitude;
+        CurrentYawRate = Mathf.Abs(currentYaw);
+
+        if (motorSource != null)
+            motorSource.pitch = Mathf.Lerp(minPitch, maxPitch, CurrentSpeed / moveSpeed);
+
+        transform.position += velocity * Time.deltaTime;
+        transform.Rotate(Vector3.up, currentYaw * Time.deltaTime, Space.World);
     }
 
     public void Respawn()
