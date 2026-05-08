@@ -230,8 +230,9 @@ public class Drone : MonoBehaviour
             !hand.GetJoint(proximalId).TryGetPose(out Pose proximal))
             return false;
 
-        return (tip.position - wrist.position).sqrMagnitude <
-               (proximal.position - wrist.position).sqrMagnitude;
+        Vector3 knuckleDir = (proximal.position - wrist.position).normalized;
+        Vector3 fingerDir  = (tip.position - proximal.position).normalized;
+        return Vector3.Dot(knuckleDir, fingerDir) < 0.3f;
     }
 
     private float ApplyDeadZone(float value)
